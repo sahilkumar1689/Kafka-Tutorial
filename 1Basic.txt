@@ -1,0 +1,135 @@
+Kafka = Apache Kafka is a distributed publish-subscribe messaging system and a robust queue that can handle a high volume of data and enables us to stream messages between different microservices. Kafka messages are persisted on the disk and replicated within the cluster to prevent data loss.
+It known for its high Throughtput,fault tolerance,persistency,message replable mechanisms.
+
+Messaging system = A Messaging System is responsible for transferring data from one application to another, so the applications can focus on data, but not worry about how to share it. Distributed messaging is based on the concept of reliable message queuing. Messages are queued asynchronously between client applications and messaging system. Two types of messaging patterns are available − one is point to point and the other is publish-subscribe (pub-sub) messaging system.
+1. Point to point = In a point-to-point system, messages are persisted in a queue.One message in a queue can only be consumed by one consumer only.Once a consumer reads a message in the queue, it disappears from that queue.
+2. Pub-Sub = In the publish-subscribe system, messages are persisted in a topic. Unlike point-to-point system,in kafka multiple consumers can subscribe to one or more topic and consume all the messages in that topic.
+
+Difference between the rabbitmq and kafka = Both are popular open source messaging system used for different use cases:
+1. Rabbitmq = Based on point to point messaging system,low Latency,AMQP Protocol,push based,not replay messages.Best for task scheduling,backgorund job processing.
+2. Kafka = Based on publisher subscribe messaging system,high Throughtput,fault tolerance,pull based,replay messages.Event driven architecture,distibuted log stream data pipelines.
+
+Note = 1. Rabbitmq can also implement the pub-sub using fanout exchange pattern and kafka can also implement the point to point using n partition = n cosumers in one consumer group.But they are not meant for it.
+
+
+
+Components of kafka:
+
+1. Kafka Producer & Consumer:
+Producers send data to Kafka topics.Consumers read data from topics asynchronously.
+Multiple Consumers subscribe to a topic and process messages in real time.
+Kafka provides consumer groups to distribute load among multiple consumers.
+
+
+2. Kafka Consumer Groups:
+
+Multiple consumers with the same group id can read from the same topic in parallel are called the consumer groups.
+Multiple Consumers in the same group share partitions for better load balancing.
+Each partition is assigned to only one consumer per group.It means if we have n partition = n consumers in one consumer group then each consumer can get data from one partition only.
+if n partition < m consumers = the m-n consumers remains ideal.
+if n partition > m consumers = Then system becomes slow.
+
+Note = Multiple consumers group can also get data from one topics.The internal flow remains same like one consumer per partition.
+
+
+3. Kafka Broker and cluster:
+
+A Kafka broker is nothing but a server that stores and delivers messages.A broker contains one or more topics for message storage.
+On the other hand , group of multiple brokers is called cluster.A Kafka cluster consists of multiple brokers working together in order to provide high availability and fault tolerance.
+In order to provide fault tolerance data is replicated across multiple brokers for reliability.
+e.g. = In one kafla cluster we generally follow leader-follower architecture.Were one broker behave as leader and responsible for all read and write task and the other brokers behave as follower,they simple key thier data in sync with respect to the leader.If leader fails any oen of the follower broker becomes leader by election done by the Zookeeper.
+
+
+
+4. Kafka Topics and partitions:
+Kafka topic is nothing but a logical categorization of the producer messages and a producer sends messages to any particular topic, and consumers subscribe to it.Like we can have one topics for orders,payments,auth,etc.
+
+In each topics, we can have multiple partitions to improve parallel processing.
+A partition is an append-only, ordered, immutable log file. Kafka splits topics into multiple partitions to scale horizontally.
+Data is stored in ordered within one partition but unordered across the other partitions.
+Now, whenever any message comes into the topic kafka decide in which partition message need to store.It decide on two basis message_key or roubd robbin algorithm.
+where, message_key = Means user tell in which partition need to store
+round_robin = Round Robin (RR) is a preemptive CPU scheduling algorithm in which each process is assigned a fixed time slice (called a time quantum) in a cyclic order.
+
+On the other hand inside a partition we can track data using the offset value.Each message has a unique offset number to ensure consumers read messages sequentially.And using this offset value consumer can also replay that particular message as well.
+We manage the offset value using auto commit = kafka handle , manual commit = we decide when to commit.
+
+
+5. Kafka Zookeeper and kraft:
+ZooKeeper was a separate service layer that managed Kafka’s metadata and cluster state.
+Basically , the design attributes of Kafka make it highly available and fault-tolerant. But, being a distributed system, Kafka requires a mechanism for coordinating multiple decisions between all the active brokers. It also requires maintaining a consistent view of the cluster and its configurations. Kafka has been using ZooKeeper to achieve this for a long time now.
+But the porblem with Zookeeper is, ZooKeeper adds an extra management layer for Kafka.Which make the stepup and managing the kafka more complex.
+
+KRaft is Kafka’s built-in Raft-based consensus mechanism that replaces ZooKeeper and allows Kafka to manage its own metadata internally in a distributed and fault-tolerant way.
+
+
+Flow = Producer produce the message with the message key that tells in which topic and partition they need to go, to the kafka broker.
+Kafka broker check the message key and store the message to particular topic and in the given partition, if not present store using round_robin algorithm in the linear order within partition.After that leader broker wait for the follower brokers to be in sync according to the configuration that we set if ack=0 now wait,ack = 1, leader can confirms the follower be in sync but dangerous if leader fails immediately , ack=all, leader wait for all follower to be in-sync , recommended also.
+After that message ready for the consumer to consume.All the metadata and leader election, offset management can be handled by the kraft internally.
+
+Note = 1. Leader follower selected at kafka level we doesn't need to do anything.
+2. Kafka select leader-follower replication at partitions level not topics or broker level.
+
+for example:
+1. Case 1 = 1 topic with 10 partitions with three brokers.
+Architecture will be:
+
+P0 → kafka1 (L), kafka2, kafka3
+P1 → kafka2 (L), kafka1, kafka3
+P2 → kafka3 (L), kafka1, kafka2
+P3 → kafka1 (L), kafka2, kafka3
+P4 → kafka2 (L), kafka1, kafka3
+P5 → kafka3 (L), kafka1, kafka2
+P6 → kafka1 (L), kafka2, kafka3
+P7 → kafka2 (L), kafka1, kafka3
+P8 → kafka3 (L), kafka1, kafka2
+P9 → kafka1 (L), kafka2, kafka3
+
+2.Case 2 = 3 topics with 10 partitions each with three brokers.
+Architecture will be replicated Independent for each topic:
+
+topic 1:
+P0 → kafka1 (L), kafka2, kafka3
+P1 → kafka2 (L), kafka1, kafka3
+P2 → kafka3 (L), kafka1, kafka2
+P3 → kafka1 (L), kafka2, kafka3
+P4 → kafka2 (L), kafka1, kafka3
+P5 → kafka3 (L), kafka1, kafka2
+P6 → kafka1 (L), kafka2, kafka3
+P7 → kafka2 (L), kafka1, kafka3
+P8 → kafka3 (L), kafka1, kafka2
+P9 → kafka1 (L), kafka2, kafka3
+
+topic 2:
+P0 → kafka1 (L), kafka2, kafka3
+P1 → kafka2 (L), kafka1, kafka3
+P2 → kafka3 (L), kafka1, kafka2
+P3 → kafka1 (L), kafka2, kafka3
+P4 → kafka2 (L), kafka1, kafka3
+P5 → kafka3 (L), kafka1, kafka2
+P6 → kafka1 (L), kafka2, kafka3
+P7 → kafka2 (L), kafka1, kafka3
+P8 → kafka3 (L), kafka1, kafka2
+P9 → kafka1 (L), kafka2, kafka3
+
+topic 3:
+P0 → kafka1 (L), kafka2, kafka3
+P1 → kafka2 (L), kafka1, kafka3
+P2 → kafka3 (L), kafka1, kafka2
+P3 → kafka1 (L), kafka2, kafka3
+P4 → kafka2 (L), kafka1, kafka3
+P5 → kafka3 (L), kafka1, kafka2
+P6 → kafka1 (L), kafka2, kafka3
+P7 → kafka2 (L), kafka1, kafka3
+P8 → kafka3 (L), kafka1, kafka2
+P9 → kafka1 (L), kafka2, kafka3
+
+
+Consumer rebalancing is the process by which Kafka dynamically redistributes partitions among consumers in a group to ensure fault tolerance and scalability.
+
+Throughtput = It refers to the amount of data or the number of requests a server can handle and process within a specific time frame.
+Latency = It refers to the time it takes for a data packet to travel from a client (user's device) to a server and back.
+Bandwidth = Means how much data packets can be transfered with in a specific time frame.e.g. = if Bandwidth is 100 mbps then 100 megabites of data can be transfered in a second.
+Formula:
+Throughtput = number of requests/Latency
+
